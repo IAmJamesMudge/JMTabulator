@@ -2808,8 +2808,8 @@ function requireReact () {
 var reactExports = requireReact();
 var React = /*@__PURE__*/getDefaultExportFromCjs(reactExports);
 
-const Button = ({ label }) => {
-    return React.createElement("button", null, label);
+const Button = (props) => {
+    return React.createElement("button", { onClick: props.onClick, style: { backgroundColor: props.backgroundColor, transform: `scale(${props.size === "large" ? 1.2 : 1})` } }, props.label);
 };
 
 export { Button };
