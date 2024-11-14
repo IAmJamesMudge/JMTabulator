@@ -1,19 +1,30 @@
 {
   "name": "jmtabulator",
   "version": "1.0.0",
-  "main": "index.js",
-  "type": "module",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "files": [
+    "dist"
+  ],
+  "types": "dist/index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "storybook": "storybook dev"
+    "storybook": "storybook dev",
+    "rollup-build-lib": "rollup -c"
   },
   "keywords": [],
-  "author": "",
+  "author": "James Mudge",
   "license": "ISC",
-  "description": "",
+  "description": "A great efficient table component wrapping Tabulator for pivoting and data display",
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.1",
+    "@rollup/plugin-node-resolve": "^15.3.0",
+    "@rollup/plugin-typescript": "^12.1.1",
     "@storybook/react-vite": "^8.4.4",
     "@types/react": "^18.3.12",
+    "rollup": "^4.26.0",
+    "rollup-plugin-dts": "^6.1.1",
+    "tslib": "^2.8.1",
     "typescript": "^5.6.3"
   },
   "peerDependencies": {
