@@ -1,0 +1,9 @@
+.tabulator-moving {
+    background-color: rgba(0,0,0,0.1);
+    border: 1px solid #000;
+    cursor: move;
+}
+
+.tabulator .tabulator-cell {
+    border: 1px solid #000; /* Black solid borders */
+  }
