@@ -202,7 +202,8 @@ export const buildColumnsFromPivotedData = (pivotedData: any[], groupBy: string[
         title:"Name", 
         field:"Name", 
         width:200, 
-        responsive:0
+        responsive:0,
+        editable: false
     });
 
     return columns;

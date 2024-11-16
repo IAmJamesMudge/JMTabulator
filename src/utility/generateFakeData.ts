@@ -38,6 +38,8 @@ export function generateTestData(numRecords: number, seed?: number): DataObject[
     }
     const data: DataObject[] = [];
 
+    console.log("Should generate data: ", numRecords, seed);
+
     for (let i = 0; i < numRecords; i++) {
         const categoryIndex = faker.number.int({ min: 0, max: categories.length - 1 });
         const category = categories[categoryIndex];

@@ -4,6 +4,8 @@
     cursor: move;
 }
 
-.tabulator .tabulator-cell {
-    border: 1px solid #000; /* Black solid borders */
-  }
+/* .tabulator {
+    .tabulator-cell {
+        border: 1px solid rgba(0,0,0,0.85);
+    }
+} */

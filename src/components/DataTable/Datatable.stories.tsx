@@ -3,6 +3,7 @@ import { fn } from '@storybook/test';
 
 import DataTable from './DataTable';
 import { generateTestData } from '../../utility/generateFakeData';
+import React from 'react';
 
 // More on how to set up stories at: https://storybook.js.org/docs/writing-stories#default-export
 const meta = {
@@ -16,7 +17,27 @@ const meta = {
   tags: ['autodocs'],
   // https://storybook.js.org/docs/api/argtypes
   argTypes: {
-    
+    data: {
+      table: {
+        disable: true
+      }
+    },
+    //@ts-ignore
+    itemCount: {
+      control: { type: 'number', min: 1 },
+      description: 'Number of test items to generate',
+      defaultValue: 10,
+    },
+    seed: {
+      control: { type: 'number', min: 0 },
+      description: 'Seed for test data generation',
+      defaultValue: 100,
+    },
+    enablePivot: {
+      control: { type: 'boolean' },
+      description: 'Enable pivot table',
+      defaultValue: false
+    }
   },
   // https://storybook.js.org/docs/essentials/actions#action-args
   args: { 
@@ -36,4 +57,17 @@ export const Basic: Story = {
       splitBy: ["region", "gender", "orderStatus"] as any,
     }
   },
+  render: function Render(args, context) {
+    
+    const data= generateTestData((args as any).itemCount, (args as any).seed);
+
+    console.log("Generated test data: ", data);
+
+    const finalArgs = {...args, data};
+    if (!(finalArgs as any).enablePivot) {
+      delete finalArgs.pivot;
+    }
+
+    return <DataTable {...finalArgs} />;
+  }
 };
