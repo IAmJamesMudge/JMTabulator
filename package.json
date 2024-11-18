@@ -19,7 +19,6 @@
   "description": "A great efficient table component wrapping Tabulator for pivoting and data display",
   "devDependencies": {
     "@chromatic-com/storybook": "^3.2.2",
-    "@faker-js/faker": "^9.2.0",
     "@rollup/plugin-commonjs": "^28.0.1",
     "@rollup/plugin-node-resolve": "^15.3.0",
     "@rollup/plugin-terser": "^0.4.4",
@@ -50,11 +49,5 @@
     "react-dom": "^18.3.1"
   },
   "dependencies": {
-    "arquero": "^7.2.0",
-    "jspdf": "^2.5.2",
-    "jspdf-autotable": "^3.8.4",
-    "lodash": "^4.17.21",
-    "react-hotkeys-hook": "^4.6.1",
-    "tabulator-tables": "^6.3.0"
   }
 }
