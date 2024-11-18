@@ -14,7 +14,7 @@ const meta = {
     layout: 'centered',
   },
   // This component will have an automatically generated Autodocs entry: https://storybook.js.org/docs/writing-docs/autodocs
-  tags: ['autodocs'],
+  //tags: ['autodocs'],
   // https://storybook.js.org/docs/api/argtypes
   argTypes: {
     data: {
@@ -32,41 +32,75 @@ const meta = {
       control: { type: 'number', min: 0 },
       description: 'Seed for test data generation',
       defaultValue: 100,
-    },
-    enablePivot: {
-      control: { type: 'boolean' },
-      description: 'Enable pivot table',
-      defaultValue: false
     }
   },
   // https://storybook.js.org/docs/essentials/actions#action-args
   args: { 
-    data: generateTestData(100, 123)
+    data: [],
+    //@ts-ignore
+    itemCount: 100,
+    seed: 123
   },
 } satisfies Meta<typeof DataTable>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+
 // More on writing stories with args: https://storybook.js.org/docs/writing-stories/args
 export const Basic: Story = {
   args: {
-    movableRows: true,
-    pivot: {
-      groupBy: ["category", "subcategory", "payment_method"] as any,
-      splitBy: ["region", "gender", "orderStatus"] as any,
-    }
+    movableRows: false,
+    autoColumns: true
   },
   render: function Render(args, context) {
     
     const data= generateTestData((args as any).itemCount, (args as any).seed);
 
-    console.log("Generated test data: ", data);
+    return <DataTable {...args} data={data} />;
+  }
+};
+
+
+export const Basic_Movable_Rows: Story = {
+  args: {
+    movableRows: true,
+  },
+  render: function Render(args, context) {
+    
+    const data= generateTestData((args as any).itemCount, (args as any).seed);
 
     const finalArgs = {...args, data};
-    if (!(finalArgs as any).enablePivot) {
-      delete finalArgs.pivot;
-    }
+    delete finalArgs.pivot;
+
+    return <DataTable {...finalArgs} />;
+  }
+};
+
+export const Pivot: Story = {
+  args: {
+    movableRows: false,
+    pivot: {
+      groupBy: ["category", "subcategory", "payment_method"] as any,
+      splitBy: ["region", "gender", "orderStatus"] as any,
+      computeOn: [{function: "sum", key: "amount"}] as any
+    },
+    //@ts-ignore
+    itemCount: 1000
+  },
+  argTypes: {
+    movableRows: {
+      table: {
+        disable: true
+      }
+    },
+  },
+  
+  render: function Render(args, context) {
+    
+    const data= generateTestData((args as any).itemCount, (args as any).seed);
+
+    const finalArgs = {...args, data};
 
     return <DataTable {...finalArgs} />;
   }

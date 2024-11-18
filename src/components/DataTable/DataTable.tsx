@@ -1,26 +1,69 @@
-import React, { useEffect, useLayoutEffect, useRef, forwardRef, useImperativeHandle, useMemo, useState } from "react";
-import { createRoot } from "react-dom/client";
-import { TabulatorFull, ColumnDefinition, Options, CellComponent } from 'tabulator-tables';
-import { handleRowMoved, handleRowMoving } from "./DataTableEventHandlers/onRow";
+import React, { useEffect, useLayoutEffect, useRef, useMemo, useState, MutableRefObject, useId } from "react";
+import { createRoot, Root } from "react-dom/client";
+import { TabulatorFull, ColumnDefinition, Options, CellComponent, Tabulator } from 'tabulator-tables';
+import { onRowMoved, onRowMoving } from "./DataTableEventHandlers/onRow";
 
 import "tabulator-tables/dist/css/tabulator.min.css";
 import "tabulator-tables/dist/css/tabulator_simple.min.css";
 import "./DataTable.css";
-import { buildColumnsFromPivotedData, groupData, pivot } from "../../utility/arquero/pivotOperations";
+import { buildColumnsFromPivotedData, groupData, pivot, PivotConfiguration } from "../../utility/arquero/pivotOperations";
 
 import jsPDF from 'jspdf';
-import { applyPlugin } from 'jspdf-autotable';
+import { applyPlugin, Cell } from 'jspdf-autotable';
 import { useHotkeys } from "react-hotkeys-hook";
-applyPlugin(jsPDF)
+import ReactDOM from "react-dom";
+import { onCellDblClick, onCellContext, onCellMouseDown, onCellMouseUp } from "./DataTableEventHandlers/onCell";
+import { onDataTreeRowCollapsed, onDataTreeRowExpanded } from "./DataTableEventHandlers/onDataTree";
+import { onRangeChanged, onRangeRemoved } from "./DataTableEventHandlers/onRange";
+import { InjectComponent } from "../../utility/react/injectComponent";
+import { FiltersTableModal } from "../FilterTable/Modal";
+import { TabulatorFilter } from "../FilterTable/FiltersTable";
+import cloneDeep from 'lodash/cloneDeep';
+import { removeAllRanges } from "./helpers/removeAllRanges";
+import { injectAddRowButton } from "./helpers/injectAddRowButton";
+import { useAddOrRemoveRowColumn } from "./helpers/hooks/useRemoveRowColumn";
+
+applyPlugin(jsPDF);
+
+TabulatorFull.extendModule("filter", "filters", {
+  in: function (filterValue: string | string[], dataValue: string, rowData: any, filterParams: any) {
+    //console.log("Filter hit: ", filterValue, dataValue, rowData, filterParams);
+    // Convert the string value into an array if needed
+    if (typeof filterValue === "string") {
+      filterValue = filterValue.split(",");
+      if (filterValue.includes("")) {
+        filterValue.push(undefined!);
+        filterValue.push(null!);
+      }
+    }
+
+    // Perform the 'in' comparison
+    return filterValue.includes(dataValue);
+  },
+  get "not in"() {
+    return (filterValue: string | string[], dataValue: string, rowData: any, filterParams: any) => {
+      //@ts-ignore
+      return !this.in(filterValue, dataValue, rowData, filterParams);
+    }
+  }
+})
 
 export interface DataTableProps<T> {
   data: T[];
+  autoColumns?: boolean;
   columns?: ColumnDefinition[] | undefined;
   movableRows?: boolean;
-  pivot?: {
-    groupBy: (keyof T & string)[];
-    splitBy: (keyof T & string)[];
-  }
+  pivot?: PivotConfiguration<T>;
+  layout?: Options["layout"];
+  containerClassName?: string;
+  containerStyle?: React.CSSProperties;
+  tableStyle?: React.CSSProperties;
+  canAddRows?: boolean;
+  canRemoveRows?: boolean;
+  newRowDefaultValues?: Partial<T>;
+  footerElement?: React.ReactNode;
+  handleTableIsReady?: (table: Tabulator) => void;
+  useFiltersTable?: boolean;
 }
 /*
             columns: [
@@ -56,23 +99,42 @@ export interface DataTableProps<T> {
             ],
 */
 
-const DataTable = forwardRef(function DataTable<T>(props: DataTableProps<T>, ref: React.Ref<TabulatorFull | null>) {
+const DataTable = (function DataTable<T>(props: DataTableProps<T>) {
+  const [tableStateful, setTableStateful] = useState<TabulatorFull | null>(null);
   const tableRef = useRef<TabulatorFull | null>(null);
   const selectedCell = useRef<CellComponent | null>(null);
 
-  // Expose the tableRef to the parent component
-  useImperativeHandle(ref, () => tableRef.current, [tableRef.current]);
+  const [filters, setFilters] = useState<TabulatorFilter[]>([]);
+  const [filtersVisible, setFiltersVisible] = useState(false);
+
+  const uniqueId = useId();
+  const id = `table-${uniqueId.replace(/:/g, "")}`;
+
+  useAddOrRemoveRowColumn(tableStateful, props.canRemoveRows ?? false, props.canAddRows ?? false);
+
+  const mutableData = useMemo(() => {
+
+    return cloneDeep(props.data);
+  }, [props.data]);
 
   useHotkeys("enter", () => {
     console.log(selectedCell.current?.edit(true));
   }, []);
 
+  const addRowColumnId = useId().replace(/:/g, "add-row-column");
+
+  const handleInjectingReactComponents = () => {
+    if (props.canAddRows) {
+      injectAddRowButton(tableRef.current!, addRowColumnId);
+    }
+  }
+
   const tabulatorOptions: Options = useMemo(() => {
 
-    return {
-      height: "500px",
-      autoColumns: (!props.columns) && !props.pivot,
-      layout: "fitDataFill",
+    const options: Options = {
+      height: props.containerStyle?.height,
+      autoColumns: props.autoColumns,
+      layout: props.layout ?? "fitDataFill",
       reactiveData: true,
       movableRows: props.movableRows && !props.pivot,
       resizableRows: false,
@@ -88,9 +150,8 @@ const DataTable = forwardRef(function DataTable<T>(props: DataTableProps<T>, ref
         editable: false,
 
         editor(cell, onRendered, success, cancel, editorParams) {
-
           const container = document.createElement("div");
-          const root = createRoot(container);
+
           const InputComponent = () => {
             const [value, setValue] = useState(cell.getValue() as string ?? "");
             const inputRef = useRef<HTMLInputElement>(null);
@@ -123,22 +184,9 @@ const DataTable = forwardRef(function DataTable<T>(props: DataTableProps<T>, ref
               />
             )
           }
-          root.render(<InputComponent />);
+          InjectComponent(container, <InputComponent />);
+
           return container;
-          // const input = document.createElement("input");
-          // input.style.width = "100%";
-          // input.style.height = "100%";
-          // input.style.boxSizing = "border-box";
-          // input.value = cell.getValue() ?? "";
-          // input.addEventListener("change", () => {
-          //     success(input.value);
-          // });
-          // onRendered(() => {
-          //   setTimeout(() => {
-          //     input.focus();
-          //   }, 100);
-          // });
-          // return input;
         },
       },
       //@ts-ignore
@@ -146,74 +194,55 @@ const DataTable = forwardRef(function DataTable<T>(props: DataTableProps<T>, ref
         jspdf: jsPDF,
       },
     }
-  },[props.columns, props.pivot, props.movableRows])
 
+    if (props.footerElement) {
+      const container = document.createElement("div");
 
-  useLayoutEffect(() => {
+      setTimeout(() => {
+        console.log("Should render into: ", container);
+        InjectComponent(container, props.footerElement);
 
-    if (props.columns) {
-      tabulatorOptions.columns = props.columns;
-    }
-    if (props.pivot) {
-      tabulatorOptions.dataTree = true;
-      tabulatorOptions.dataTreeStartExpanded = true;
-    }
-    const table = new TabulatorFull("#tabulator-table", tabulatorOptions);
+        setTimeout(() => {
+          tableRef.current?.redraw();
+        }, 100);
+      }, 0);
 
-
-    table.on("rowMoving", handleRowMoving);
-    table.on("rowMoved", handleRowMoved);
-    table.on("cellDblClick", (e, cell) => {
-      if (!!props.pivot && cell.getColumn().getDefinition().field?.toLowerCase() === "name") {
-
-      } else {
-        cell.edit(true);
-      }
-    });
-
-    table.on("rangeChanged", (range) => {
-      const cells = range.getCells();
-      if (cells.length === 1) {
-        cells.forEach((cellArray: any) => {
-          (cellArray as CellComponent[]).forEach((cell: CellComponent) => {
-            selectedCell.current = cell;
-          });
-        });
-      } else {
-        selectedCell.current = null;
-      }
-    });
-
-    table.on("rangeRemoved", (range) => {
-      // there's a bug with ranges in tabulator when also using hierarchical data
-      // so we need to manually remove the 'tabulator-range-selected' class
-      range.getCells().forEach((cellArray: any) => {
-        (cellArray as CellComponent[]).forEach((cell: CellComponent) => {
-          const element = cell.getElement();
-          element.classList.remove("tabulator-range-selected")
-        });
-      });
-    });
-
-    const handleTableBuilt = () => {
-      tableRef.current = table;
+      options.footerElement = container;
     }
 
-    table.on("tableBuilt", handleTableBuilt);
-    return () => {
-      table.off("tableBuilt", handleTableBuilt);
-      tableRef.current?.destroy();
-    };
-  }, [tabulatorOptions]);
+    if (options.movableRows) {
+      options.rowHeader = { headerSort: false, resizable: false, minWidth: 30, width: 30, rowHandle: true, formatter: "handle", frozen: false };
+    }
 
-  useEffect(() => {
+    return options;
+  }, [props.pivot, props.movableRows])
+
+  const handleTableBuilt = () => {
+
     if (tableRef.current) {
       tableRef.current.clearData();
-      
+
       if (!props.pivot) {
-        tableRef.current.setData(props.data);
+        console.log("Setting data directly");
+        tableRef.current.blockRedraw();
+        tableRef.current.setData(mutableData);
+        const cols = props.columns ?? (props.data.length > 0 ? Object.keys(props.data[0]!).map((key) => ({
+          title: key.charAt(0).toUpperCase() + key.slice(1), // Capitalize title
+          field: key,
+        })) : []);
+        tableRef.current.setColumns(cols);
+        tableRef.current.restoreRedraw();
       } else {
-        const newData = pivot(props.data, props.pivot.groupBy, props.pivot.splitBy);
+
+        let pivotableData = mutableData;
+        if (filters.length > 0) {
+          console.log("Applying filter before pivot: ", filters);
+          tableRef.current.setData(mutableData);
+          tableRef.current.setFilter(filters);
+          pivotableData = tableRef.current.getData("active");
+        }
+
+        const newData = pivot(pivotableData, props.pivot);
 
         //console.log("new data: ", newData);
         const columns = buildColumnsFromPivotedData(newData, props.pivot.groupBy);
@@ -230,18 +259,134 @@ const DataTable = forwardRef(function DataTable<T>(props: DataTableProps<T>, ref
         tableRef.current.setData(hierarchalData);
       }
 
+      props.handleTableIsReady?.(tableRef.current);
+      //handleInjectingReactComponents();
+
       tableRef.current.redraw(true);
+
+      setTableStateful(tableRef.current);
+    } else {
+      setTableStateful(null);
     }
-  }, [tabulatorOptions, props.data]);
+  }
+
+  const applyTableListeners = () => {
+    const table = tableRef.current as TabulatorFull;
+    table.on("rowMoving", onRowMoving);
+    table.on("rowMoved", onRowMoved);
+    table.on("cellDblClick", onCellDblClick);
+    table.on("cellContext", onCellContext);
+    table.on("cellMouseDown", onCellMouseDown);
+    table.on("cellMouseUp", onCellMouseUp);
+    table.on("rangeChanged", (range) => onRangeChanged(range, selectedCell));
+    table.on("rangeRemoved", onRangeRemoved);
+    table.on("dataTreeRowCollapsed", onDataTreeRowCollapsed);
+    table.on("dataTreeRowExpanded", onDataTreeRowExpanded);
+  }
+
+  useLayoutEffect(() => {
+
+    if (props.columns) {
+      tabulatorOptions.columns = props.columns;
+    }
+    if (props.pivot) {
+      tabulatorOptions.dataTree = true;
+      tabulatorOptions.dataTreeStartExpanded = true;
+    }
+    const table = new TabulatorFull(`#${id}`, tabulatorOptions);
+
+
+    const localHandleTableBuilt = () => {
+      tableRef.current = table;
+      applyTableListeners();
+      handleTableBuilt();
+    }
+
+    table.on("tableBuilt", localHandleTableBuilt);
+
+    return () => {
+      table.off("tableBuilt", localHandleTableBuilt);
+      tableRef.current?.destroy();
+      tableRef.current = null;
+    };
+  }, [tabulatorOptions]);
+
+  useEffect(() => {
+    handleTableBuilt();
+  }, [tabulatorOptions, mutableData, filters]);
+
+  const fieldOptions = useMemo(() => {
+
+    if (mutableData.length === 0) { return []; }
+
+    const fields = new Set<string>();
+    for (const field in mutableData[0]) {
+      fields.add(field);
+    }
+
+    return Array.from(fields);
+  }, [mutableData]);
+
+  const containerStyle: React.CSSProperties = useMemo(() => {
+    return {
+      display: "flex",
+      flexDirection: "column",
+      flex: 1,
+      height: "100%",
+      width: "100%",
+      ...props.containerStyle
+    }
+  }, [props.containerStyle]);
+
+  const tableStyle: React.CSSProperties = useMemo(() => {
+    return {
+      display: "flex",
+      flexDirection: "column",
+      height: "100%",
+      width: "100%",
+      ...props.tableStyle
+    }
+  }, [props.tableStyle]);
 
   return (
     <>
-      <button onClick={() => {
-        tableRef.current?.download("pdf", "data.pdf");
-      }}>
-        Test
-      </button>
-      <div style={{ width: "1200px" }} id="tabulator-table" />
+      <div className={props.containerClassName ?? ""} style={containerStyle}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: 1,
+            height: "100%",
+            width: "100%"
+          }}
+        >
+          {
+            props.useFiltersTable && (
+              <div>
+                <button onClick={() => {
+                  setFiltersVisible(true);
+                }}>
+                  Filters
+                </button>
+                <FiltersTableModal
+                  visible={filtersVisible}
+                  onClose={() => setFiltersVisible(false)}
+                  onFiltersChange={(filters) => {
+                    setFilters(filters);
+                    tableRef.current?.setFilter(filters);
+                  }}
+                  fieldOptions={fieldOptions}
+                  filters={filters}
+                  tableStyle={{
+                    height: "450px",
+                  }}
+                />
+              </div>
+            )
+          }
+          <div style={tableStyle} id={id} /> {/* this is where the table gets rendered */}
+        </div>
+      </div>
     </>
   );
 });

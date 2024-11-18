@@ -31,6 +31,7 @@
     "@storybook/react": "^8.4.4",
     "@storybook/react-vite": "^8.4.4",
     "@storybook/test": "^8.4.4",
+    "@types/lodash": "^4.17.13",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/tabulator-tables": "^6.2.3",
@@ -52,6 +53,7 @@
     "arquero": "^7.2.0",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
+    "lodash": "^4.17.21",
     "react-hotkeys-hook": "^4.6.1",
     "tabulator-tables": "^6.3.0"
   }

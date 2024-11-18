@@ -2,9 +2,20 @@ import * as aq from 'arquero';
 import { PivotOptions } from 'arquero/dist/types/table/types';
 import { ColumnDefinition } from 'tabulator-tables';
 
+export interface PivotConfiguration<T> {
+    groupBy: (keyof T & string)[];
+    splitBy: (keyof T & string)[];
+    computeOn: {
+        title?: string;
+        key: (keyof T & string);
+        function: "sum" | "average" | "count" | "min" | "max" | "median" | "product";
+    }[];
+}
 
-export const pivot = <T,>(data: T[], groupBy: (keyof T & string)[], splitBy: (keyof T & string)[]) => {
+export const pivot = <T,>(data: T[], config: PivotConfiguration<T>) => {
 
+    const { groupBy, splitBy, computeOn } = config;
+    const computeEntry = computeOn?.map((c) => ({ [c.title ?? c.key]: aq.op[c.function](c.key) as any })) ?? [];
     const dt = aq.from(data);
 
     const options: PivotOptions = {
@@ -14,8 +25,8 @@ export const pivot = <T,>(data: T[], groupBy: (keyof T & string)[], splitBy: (ke
 
     let newData = dt
         .groupby(groupBy)
-        //.pivot(splitBy, [{ amount: aq.op.sum("amount"), average: aq.op.average("amount") }], options);
-        .pivot(splitBy, [{ amount: aq.op.sum("amount") }], options);
+        //.pivot(splitBy, [{ amount: aq.op.sum("amount") }], options);
+        .pivot(splitBy, computeEntry, options);
 
 
     //generate summaries by pivoting on the same data but excluding one column at a time
@@ -23,13 +34,13 @@ export const pivot = <T,>(data: T[], groupBy: (keyof T & string)[], splitBy: (ke
         const summaryData = dt
             .groupby(groupBy.slice(0, -x)) // Group by all but the last column (e.g., 'age')
             //.pivot(splitBy, [{ amount: aq.op.sum("amount"), average: aq.op.average("amount") }], options);
-            .pivot(splitBy, [{ amount: aq.op.sum("amount") }], options);
+            .pivot(splitBy, computeEntry, options);
 
         // Combine the pivoted data and summary data
         newData = newData.concat(summaryData);
     }
 
-    
+
 
     const finalData = newData.orderby(groupBy);
 
@@ -194,15 +205,15 @@ export const buildColumnsFromPivotedData = (pivotedData: any[], groupBy: string[
             columns.push(column);
         }
     }
-    
+
     columns = columns.filter(c => !groupBy.includes(c.title));
-    
+
 
     columns.unshift({
-        title:"Name", 
-        field:"Name", 
-        width:200, 
-        responsive:0,
+        title: "Name",
+        field: "Name",
+        width: 200,
+        responsive: 0,
         editable: false
     });
 
@@ -212,12 +223,12 @@ export const buildColumnsFromPivotedData = (pivotedData: any[], groupBy: string[
 
 
 function getGroupIdentifier(row: any, groupedBy: string[], maxDepth: number = 1e99): string {
-    return groupedBy.filter((k,i) => row[k] !== undefined && i <= maxDepth).map((key) => row[key]).join(" - ");
+    return groupedBy.filter((k, i) => row[k] !== undefined && i <= maxDepth).map((key) => row[key]).join(" - ");
 };
 /**
  * Look at an index and see what the depth of that row is 
  */
-function getDepth (dataset: any[], index: number, groupedBy: string[]): number {
+function getDepth(dataset: any[], index: number, groupedBy: string[]): number {
     const row = dataset[index];
     let depth = 0;
     for (var x = 0; x < groupedBy.length; x++) {
